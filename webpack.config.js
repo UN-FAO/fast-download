@@ -1,24 +1,30 @@
 /* global __dirname, require, module*/
-
 const webpack = require('webpack');
-const UglifyJsPlugin = webpack.optimize.UglifyJsPlugin;
 const path = require('path');
 const env = require('yargs').argv.env; // use --env with webpack 2
 const pkg = require('./package.json');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+const showBundle = false;
+var LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
+let plugins = [new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/), new LodashModuleReplacementPlugin()];
 
+if (showBundle) {
+  plugins.push(new BundleAnalyzerPlugin());
+}
 let libraryName = pkg.name;
 
-let plugins = [],
-  outputFile;
+let outputFile, minimize;
 
 if (env === 'build') {
-  plugins.push(new UglifyJsPlugin({ minimize: true }));
+  minimize = true;
   outputFile = libraryName + '.min.js';
 } else {
+  minimize = false;
   outputFile = libraryName + '.js';
 }
 
 const config = {
+  mode: 'production',
   entry: __dirname + '/src/index.js',
   devtool: 'source-map',
   output: {
@@ -28,12 +34,19 @@ const config = {
     libraryTarget: 'umd',
     umdNamedDefine: true
   },
+  optimization: {
+    minimize: minimize
+  },
   module: {
     rules: [
       {
         test: /(\.jsx|\.js)$/,
         loader: 'babel-loader',
-        exclude: /(node_modules|bower_components)/
+        exclude: /(node_modules|bower_components)/,
+        options: {
+          plugins: ['lodash'],
+          presets: [['env', { modules: false, targets: { node: 4 } }]]
+        }
       },
       {
         test: /(\.jsx|\.js)$/,
@@ -42,11 +55,31 @@ const config = {
       }
     ]
   },
+  plugins: plugins,
   resolve: {
     modules: [path.resolve('./node_modules'), path.resolve('./src')],
-    extensions: ['.json', '.js']
+    extensions: ['.json', '.js'],
+    alias: {
+      'formio-export': path.resolve(__dirname, 'src/')
+    }
   },
-  plugins: plugins
+  externals: {
+    lodash: {
+      commonjs: 'lodash',
+      commonjs2: 'lodash',
+      amd: '_',
+      root: '_'
+    },
+    bluebird: 'bluebird'
+  },
+  node: {
+    // prevent webpack from injecting mocks to Node native modules
+    // that does not make sense for the client
+    dgram: 'empty',
+    fs: 'empty',
+    net: 'empty',
+    tls: 'empty'
+  }
 };
 
 module.exports = config;
